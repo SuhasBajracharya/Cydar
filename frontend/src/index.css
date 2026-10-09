@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+/* Urban Loft base */
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  background: #faf8f6;
+  color: #1c1a18;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono,
+code,
+pre {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+::placeholder {
+  color: #9c9a9a;
+}
+
+/* thin scrollbars for feed / panels */
+.nice-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.nice-scroll::-webkit-scrollbar-thumb {
+  background: #d8cfc7;
+  border-radius: 8px;
+}
+.nice-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
