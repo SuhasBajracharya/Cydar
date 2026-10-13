@@ -14,6 +14,9 @@ urlpatterns = [
     path("timeline/", views.timeline_all, name="timeline"),
     # Provider/model picker data (configured flags only, never keys).
     path("providers/", views.providers_list, name="providers-list"),
+    path("providers/<str:provider_id>/config/", views.provider_config_detail, name="provider-config"),
+    path("providers/<str:provider_id>/test/", views.provider_test, name="provider-test"),
+    path("providers/<str:provider_id>/models/", views.provider_models, name="provider-models"),
     # Agent plan generation: one-shot JSON or SSE stream, plus history.
     path("targets/<int:target_id>/run/", views.run_plan, name="run-plan"),
     path("targets/<int:target_id>/run-stream/", views.run_plan_stream, name="run-plan-stream"),

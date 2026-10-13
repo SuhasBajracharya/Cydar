@@ -14,6 +14,7 @@ from .models import (
     AgentRun,
     AuthCredential,
     Finding,
+    ProviderConfig,
     Report,
     Scan,
     Target,
@@ -156,3 +157,14 @@ class ScanAdmin(admin.ModelAdmin):
     search_fields = ("command", "output", "error", "target__domain")
     date_hierarchy = "created_at"
     readonly_fields = ("created_at",)
+
+
+@admin.register(ProviderConfig)
+class ProviderConfigAdmin(admin.ModelAdmin):
+    list_display = ("provider_id", "has_key_display", "base_url", "updated_at")
+    search_fields = ("provider_id", "base_url")
+    readonly_fields = ("created_at", "updated_at")
+
+    @admin.display(boolean=True, description="API Key Configured")
+    def has_key_display(self, obj):
+        return bool(obj.api_key)

@@ -14,6 +14,7 @@ import { ErrorBanner, Logo, Modal } from './components/ui.jsx'
 import LoginForm from './components/LoginForm.jsx'
 import TargetForm from './components/TargetForm.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import Providers from './pages/Providers.jsx'
 import TargetDetail from './pages/TargetDetail.jsx'
 import Timeline from './pages/Timeline.jsx'
 
@@ -134,6 +135,14 @@ export default function App() {
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" /><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" strokeLinecap="round" /></svg>
             Timeline
           </button>
+          <button
+            type="button"
+            onClick={() => setView({ name: 'providers' })}
+            className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${view.name === 'providers' ? 'bg-[#232323] text-white' : 'text-[#8E8A86] hover:bg-[#171717] hover:text-white'}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.28-.7-2.68.7-1.98 1.98l.17.31a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.7 1.28.7 2.68 1.98 1.98l.31-.17a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.28.7 2.68-.7 1.98-1.98l-.17-.31a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.7-1.28-.7-2.68-1.98-1.98l-.31.17a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Providers
+          </button>
         </nav>
         <div className="space-y-4 px-5 py-5">
           <div className="border-t border-[#222] pt-4">
@@ -179,6 +188,11 @@ export default function App() {
             <Timeline
               setError={setError}
               onOpenTarget={(id) => setView({ name: 'detail', id })}
+            />
+          )}
+          {view.name === 'providers' && (
+            <Providers
+              setError={setError}
             />
           )}
           {view.name === 'detail' && (

@@ -19,9 +19,19 @@ picker — no code changes. Each entry:
 
 Keys are read here at request time and never leave the backend: the
 /api/providers/ endpoint only reports `configured: true/false`.
+
+DB-stored keys (ProviderConfig model) take precedence over env vars.
+The /api/providers/<pid>/config/ endpoint lets operators manage keys
+from the web UI without editing .env or restarting Django.
 """
 
+import json
+import logging
 import os
+import urllib.error
+import urllib.request
+
+logger = logging.getLogger(__name__)
 
 
 def _openrouter_headers():
@@ -123,21 +133,68 @@ class ProviderError(Exception):
     """Bad/unknown provider selection or missing key (surfaced as HTTP 400)."""
 
 
+# ---------------------------------------------------------------------------
+# DB helpers — lazily import the model to avoid circular imports at module load
+# ---------------------------------------------------------------------------
+
+
+def _get_db_config(provider_id):
+    """Return the ProviderConfig row for *provider_id*, or None."""
+    from targets.models import ProviderConfig  # noqa: E402 — avoid circular import
+
+    try:
+        return ProviderConfig.objects.get(provider_id=provider_id)
+    except ProviderConfig.DoesNotExist:
+        return None
+
+
+def _get_effective_key(spec, provider_id):
+    """Return (api_key, source).
+
+    Keys come exclusively from ProviderConfig in the database (or 'local' for keyless providers like Ollama).
+    No env var fallback is used for keys.
+    """
+    db = _get_db_config(provider_id)
+    if db and db.api_key:
+        return db.api_key, "database"
+    return None, None
+
+
+def _get_effective_url(spec, provider_id):
+    """Return the base URL — DB override > default_url."""
+    db = _get_db_config(provider_id)
+    if db and db.base_url:
+        return db.base_url
+    return spec.get("default_url", "")
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
 def provider_status():
     """Picker data for GET /api/providers/. No secrets included."""
     out = []
     for pid, spec in PROVIDERS.items():
         requires_key = spec.get("requires_key", True)
+        _key, source = _get_effective_key(spec, pid)
+        configured = True if not requires_key else bool(_key)
+        if not requires_key and source is None:
+            source = "local"  # keyless local provider (Ollama)
         out.append(
             {
                 "id": pid,
                 "name": spec["name"],
-                "configured": True if not requires_key else bool(os.environ.get(spec["key_env"])),
+                "configured": configured,
                 "requires_key": requires_key,
                 "key_env": spec["key_env"],  # so the UI can say which var to set
                 "default_model": spec.get("default_model", ""),
                 "models": list(spec.get("models", [])),
                 "help": spec.get("help", ""),
+                "source": source,  # "database" | "environment" | "local" | null
+                "default_url": spec.get("default_url", ""),
+                "base_url": _get_effective_url(spec, pid),
             }
         )
     return out
@@ -150,11 +207,11 @@ def resolve(provider_id, model=None):
     if spec is None:
         raise ProviderError(f"Unknown provider {provider_id!r}.")
     requires_key = spec.get("requires_key", True)
-    api_key = os.environ.get(spec["key_env"])
+    api_key, _source = _get_effective_key(spec, provider_id)
     if not api_key:
         if requires_key:
             raise ProviderError(
-                f"Provider {spec['name']} has no key: set {spec['key_env']} in .env."
+                f"Provider {spec['name']} has no key: add it on the Providers page."
             )
         # Keyless local endpoint (Ollama): the OpenAI SDK still wants a
         # non-empty key, and Ollama's /v1 ignores its value.
@@ -168,6 +225,79 @@ def resolve(provider_id, model=None):
         raise ProviderError(
             f"Provider {spec['name']} needs a model id (none selected, no default)."
         )
-    base_url = os.environ.get(spec["url_env"]) or spec["default_url"]
+    base_url = _get_effective_url(spec, provider_id)
     extra = spec.get("extra_headers")
     return base_url, api_key, model_id, extra() if extra else {}
+
+
+def fetch_remote_models(provider_id):
+    """Query the provider's /v1/models endpoint and return a list of model IDs.
+
+    Returns (models_list, error_string). On success error is None;
+    on failure models_list is [] and error describes what went wrong.
+    """
+    spec = PROVIDERS.get(provider_id)
+    if spec is None:
+        return [], f"Unknown provider {provider_id!r}."
+
+    requires_key = spec.get("requires_key", True)
+    api_key, _source = _get_effective_key(spec, provider_id)
+    if not api_key and requires_key:
+        return [], f"No API key configured for {spec['name']}."
+    base_url = _get_effective_url(spec, provider_id)
+
+    # Ollama has a native /api/tags endpoint; its /v1/models also works.
+    url = f"{base_url.rstrip('/')}/models"
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    extra = spec.get("extra_headers")
+    if extra:
+        headers.update(extra())
+
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=15.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return [], f"{spec['name']} returned HTTP {exc.code}."
+    except urllib.error.URLError as exc:
+        return [], f"Failed to connect to {spec['name']}: {exc.reason}"
+    except TimeoutError:
+        return [], f"Timed out connecting to {spec['name']} ({url})."
+    except Exception as exc:
+        logger.warning("fetch_remote_models(%s) failed: %s", provider_id, exc)
+        return [], str(exc)
+
+    # Parse the response — OpenAI-style { data: [{id: ...}, ...] }
+    models = []
+    if isinstance(data, dict) and "data" in data:
+        for m in data["data"]:
+            mid = m.get("id") if isinstance(m, dict) else None
+            if mid:
+                models.append(mid)
+    elif isinstance(data, dict) and "models" in data:
+        # Ollama /api/tags format: { models: [{name: ...}, ...] }
+        for m in data["models"]:
+            name = m.get("name") if isinstance(m, dict) else None
+            if name:
+                models.append(name)
+    elif isinstance(data, list):
+        for m in data:
+            mid = m.get("id") if isinstance(m, dict) else str(m)
+            if mid:
+                models.append(mid)
+
+    models.sort()
+    return models, None
+
+
+def test_provider_key(provider_id):
+    """Validate a provider's API key by hitting /v1/models.
+
+    Returns (success: bool, detail: str).
+    """
+    models, error = fetch_remote_models(provider_id)
+    if error:
+        return False, error
+    return True, f"Key is valid — {len(models)} model(s) accessible."

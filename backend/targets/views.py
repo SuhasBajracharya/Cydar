@@ -32,11 +32,19 @@ from django.views.decorators.http import require_http_methods
 
 from agent.client import AgentAPIError, build_user_prompt, generate_plan, stream_plan
 from agent.prompts import SYSTEM_PROMPT
-from agent.providers import DEFAULT_PROVIDER, ProviderError, provider_status, resolve
+from agent.providers import (
+    DEFAULT_PROVIDER,
+    PROVIDERS,
+    ProviderError,
+    fetch_remote_models,
+    provider_status,
+    resolve,
+    test_provider_key,
+)
 from recon.runner import ReconError, allowed_presets, clean_host, run_preset
 from recon.tools import parse_scope_list
 
-from .models import AgentRun, AuthCredential, Finding, Report, Scan, Target
+from .models import AgentRun, AuthCredential, Finding, ProviderConfig, Report, Scan, Target
 
 
 # --- helpers ---------------------------------------------------------------
@@ -189,14 +197,77 @@ def me_view(request):
 
 @require_http_methods(["GET"])
 def providers_list(request):
-    """Picker data: every known provider, whether its key is set, its models.
+    """Picker data: every known provider or configured-only providers.
 
-    Keys are never exposed — only `configured: true/false` plus which env
-    var to set. Requires login so key-presence isn't public info.
+    Pass ?all=1 or ?configured_only=0 to get all available providers (for the add modal).
+    Default without params returns all providers with their configured state, or can be filtered.
     """
     if (denied := _unauthorized(request)) is not None:
         return denied
-    return JsonResponse(provider_status(), safe=False)
+    all_status = provider_status()
+    if request.GET.get("configured_only") == "1":
+        filtered = [p for p in all_status if p.get("configured")]
+        return JsonResponse(filtered, safe=False)
+    return JsonResponse(all_status, safe=False)
+
+
+@require_http_methods(["PUT", "DELETE"])
+def provider_config_detail(request, provider_id):
+    """Save or remove an operator-supplied API key + optional base URL override.
+
+    PUT  — save/update key (and optional base_url).
+    DELETE — remove DB-stored config (reverts to env var if one exists).
+    Keys are write-only: never returned in any response.
+    """
+    if (denied := _unauthorized(request)) is not None:
+        return denied
+    if provider_id not in PROVIDERS:
+        return JsonResponse({"detail": f"Unknown provider {provider_id!r}."}, status=404)
+
+    if request.method == "DELETE":
+        deleted, _ = ProviderConfig.objects.filter(provider_id=provider_id).delete()
+        return JsonResponse({"deleted": bool(deleted)})
+
+    data = _body(request)
+    api_key = (data.get("api_key") or "").strip()
+    base_url = (data.get("base_url") or "").strip()
+    if not api_key and PROVIDERS[provider_id].get("requires_key", True):
+        return JsonResponse({"detail": "api_key is required for this provider."}, status=400)
+
+    obj, _created = ProviderConfig.objects.update_or_create(
+        provider_id=provider_id,
+        defaults={"api_key": api_key, "base_url": base_url},
+    )
+    return JsonResponse({
+        "provider_id": provider_id,
+        "has_key": bool(obj.api_key),
+        "base_url": obj.base_url,
+        "source": "database",
+    })
+
+
+@require_http_methods(["POST"])
+def provider_test(request, provider_id):
+    """Validate a provider's key by hitting its /v1/models endpoint."""
+    if (denied := _unauthorized(request)) is not None:
+        return denied
+    if provider_id not in PROVIDERS:
+        return JsonResponse({"detail": f"Unknown provider {provider_id!r}."}, status=404)
+    success, detail = test_provider_key(provider_id)
+    return JsonResponse({"success": success, "detail": detail})
+
+
+@require_http_methods(["GET"])
+def provider_models(request, provider_id):
+    """Live-fetch available models from the provider's /v1/models endpoint."""
+    if (denied := _unauthorized(request)) is not None:
+        return denied
+    if provider_id not in PROVIDERS:
+        return JsonResponse({"detail": f"Unknown provider {provider_id!r}."}, status=404)
+    models, error = fetch_remote_models(provider_id)
+    if error:
+        return JsonResponse({"models": [], "error": error})
+    return JsonResponse({"models": models, "error": None})
 
 
 # --- targets ---------------------------------------------------------------

@@ -33,6 +33,10 @@ export const login = (username, password) => api('/auth/login/', { method: 'POST
 export const logout = () => api('/auth/logout/', { method: 'POST' })
 
 export const listProviders = () => api('/providers/')
+export const saveProviderConfig = (providerId, payload) => api(`/providers/${providerId}/config/`, { method: 'PUT', body: payload })
+export const deleteProviderConfig = (providerId) => api(`/providers/${providerId}/config/`, { method: 'DELETE' })
+export const testProviderKey = (providerId) => api(`/providers/${providerId}/test/`, { method: 'POST' })
+export const fetchProviderModels = (providerId) => api(`/providers/${providerId}/models/`)
 
 export const listTargets = () => api('/targets/')
 export const createTarget = (payload) => api('/targets/', { method: 'POST', body: payload })

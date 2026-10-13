@@ -119,6 +119,32 @@ class AuthCredential(models.Model):
         return f"{self.host_pattern} ({self.auth_type})"
 
 
+class ProviderConfig(models.Model):
+    """Operator-supplied API key + optional base URL override for a provider.
+
+    Complements (and takes precedence over) env-var configuration.
+    Keys are write-only in the API — never returned in GET responses.
+    Plaintext SQLite storage is dev-only (same posture as AuthCredential).
+    """
+
+    provider_id = models.CharField(max_length=30, unique=True)  # matches PROVIDERS keys
+    api_key = models.TextField(blank=True, default="")  # the secret — write-only via API
+    base_url = models.CharField(max_length=500, blank=True, default="")  # optional override
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["provider_id"]
+
+    def __str__(self):
+        has_key = "✓ key" if self.api_key else "no key"
+        return f"{self.provider_id} ({has_key})"
+
+    @property
+    def has_key(self):
+        return bool(self.api_key)
+
+
 class AgentRun(models.Model):
     """One saved plan generation (the agent's reasoning output / log)."""
 

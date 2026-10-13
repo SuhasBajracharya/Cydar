@@ -2,7 +2,6 @@
 // the Agent control card. Run mode is chosen by the Run buttons, not here.
 // Props: providers, provider, model, onChange(providerId, modelId),
 // maxIter, onMaxIter(...), disabled.
-import { CopyBtn } from './ui.jsx'
 import { labelCls } from '../lib/styles.js'
 
 const CUSTOM_MODEL = '__custom__'
@@ -75,12 +74,8 @@ export default function ModelPicker({
         </label>
       )}
       {spec && !spec.configured && spec.requires_key !== false && (
-        <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-[#7A5B1F] sm:col-span-3">
-          <span>
-            <span className="font-semibold">{spec.name}</span> has no API key. Add this line to <span className="font-mono">.env</span> (repo root), restart Django, then refresh:
-          </span>
-          <code className="rounded-md border border-[#E2DAD2] bg-[#FAF7F4] px-2 py-1 font-mono text-[11px] text-[#464646]">{spec.key_env}=paste-key-here</code>
-          <CopyBtn text={`${spec.key_env}=paste-key-here`} label="Copy line" />
+        <p className="mt-2 text-[12px] text-[#7A5B1F] sm:col-span-3">
+          <span className="font-semibold">{spec.name}</span> has no API key. Add it in the Providers page to use this provider.
         </p>
       )}
       {spec && spec.requires_key === false && (
