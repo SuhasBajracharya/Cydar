@@ -12,7 +12,7 @@ import {
   saveProviderConfig,
   testProviderKey,
 } from '../api.js'
-import { Modal } from '../components/ui.jsx'
+import { Modal, Pagination } from '../components/ui.jsx'
 import { btn, btnSecondary, card, input, labelCls, miniBtn } from '../lib/styles.js'
 
 export default function Providers({ setError }) {
@@ -21,6 +21,8 @@ export default function Providers({ setError }) {
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedAddId, setSelectedAddId] = useState('')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 5
 
   // Per-card state
   const [inputs, setInputs] = useState({}) // { [pid]: { api_key, base_url } }
@@ -197,6 +199,8 @@ export default function Providers({ setError }) {
     const q = search.toLowerCase()
     return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)
   })
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const pagedProviders = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -216,7 +220,10 @@ export default function Providers({ setError }) {
               type="text"
               placeholder="Search Provider…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
               className={`${input} py-1.5 pl-8 text-xs`}
             />
             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[#9C9A9A]">
@@ -225,7 +232,10 @@ export default function Providers({ setError }) {
             {search && (
               <button
                 type="button"
-                onClick={() => setSearch('')}
+                onClick={() => {
+                  setSearch('')
+                  setPage(1)
+                }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#9C9A9A] hover:text-[#1C1A18]"
               >
                 ✕
@@ -289,7 +299,7 @@ export default function Providers({ setError }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {filtered.map((p) => {
+          {pagedProviders.map((p) => {
             const currentInput = inputs[p.id] || { api_key: '', base_url: '' }
             const isSaving = saving[p.id]
             const isTesting = testing[p.id]
@@ -455,6 +465,16 @@ export default function Providers({ setError }) {
               </div>
             )
           })}
+
+          <div className="rounded-xl border border-[#E9E1D9] bg-white">
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </div>
         </div>
       )}
 

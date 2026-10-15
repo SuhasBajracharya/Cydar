@@ -8,7 +8,7 @@ import {
   listTimeline,
 } from '../api.js'
 import Markdown from '../components/Markdown.jsx'
-import { SevPill } from '../components/ui.jsx'
+import { Pagination, SevPill } from '../components/ui.jsx'
 import { btnDanger } from '../lib/styles.js'
 import { reportSeverity } from '../lib/report.js'
 
@@ -29,6 +29,8 @@ export default function Timeline({ onOpenTarget, setError }) {
   const [filter, setFilter] = useState('all')
   const [openId, setOpenId] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +76,8 @@ export default function Timeline({ onOpenTarget, setError }) {
     reports: items.filter((it) => it.kind === 'report').length,
   }
   const shown = items.filter((it) => filter === 'all' || it.kind === filter.slice(0, -1))
+  const totalPages = Math.ceil(shown.length / PAGE_SIZE)
+  const pagedItems = shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -95,7 +99,7 @@ export default function Timeline({ onOpenTarget, setError }) {
             const active = filter === id
             return (
               <button
-                key={id} type="button" onClick={() => setFilter(id)}
+                key={id} type="button" onClick={() => { setFilter(id); setPage(1) }}
                 className={`rounded-full px-3 py-1 text-xs font-medium ${active ? 'bg-black text-white' : 'border border-[#E2DAD2] bg-white text-[#464646] hover:bg-[#F7F3EF]'}`}
               >
                 {label} ({n})
@@ -110,7 +114,7 @@ export default function Timeline({ onOpenTarget, setError }) {
           </p>
         )}
         <ol className="divide-y divide-[#F3EEE9] px-5">
-          {shown.map((item) => {
+          {pagedItems.map((item) => {
             const rowId = item.kind === 'run' ? `run-${item.r.id}` : item.kind === 'finding' ? `finding-${item.f.id}` : `report-${item.rep.id}`
             const open = openId === rowId
             const toggle = () => setOpenId(open ? null : rowId)
@@ -190,6 +194,13 @@ export default function Timeline({ onOpenTarget, setError }) {
             )
           })}
         </ol>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={shown.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   )

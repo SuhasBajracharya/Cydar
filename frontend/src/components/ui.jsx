@@ -107,3 +107,42 @@ export function Donut({ pct }) {
     </div>
   )
 }
+
+export function Pagination({ page, totalPages, totalItems, pageSize, onPageChange }) {
+  if (totalPages <= 1) return null
+
+  const start = (page - 1) * pageSize + 1
+  const end = Math.min(page * pageSize, totalItems)
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#F0EAE4] px-5 py-3.5 text-xs text-[#77716C]">
+      <span>
+        Showing <span className="font-semibold text-[#1C1A18]">{start}</span>–
+        <span className="font-semibold text-[#1C1A18]">{end}</span> of{' '}
+        <span className="font-semibold text-[#1C1A18]">{totalItems}</span>
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="rounded-md border border-[#E2DAD2] bg-white px-2.5 py-1 font-medium text-[#464646] hover:bg-[#F7F3EF] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <span className="px-2 text-xs font-semibold text-[#1C1A18]">
+          {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="rounded-md border border-[#E2DAD2] bg-white px-2.5 py-1 font-medium text-[#464646] hover:bg-[#F7F3EF] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  )
+}
+
