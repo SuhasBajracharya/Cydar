@@ -28,10 +28,15 @@ from the web UI without editing .env or restarting Django.
 import json
 import logging
 import os
+import time as _time
 import urllib.error
 import urllib.request
 
 logger = logging.getLogger(__name__)
+
+# In-memory cache of successful /v1/models listings: {pid: (monotonic_ts, [ids])}.
+_REMOTE_MODELS_CACHE = {}
+_MODELS_CACHE_TTL_S = 600
 
 
 def _openrouter_headers():
@@ -230,12 +235,21 @@ def resolve(provider_id, model=None):
     return base_url, api_key, model_id, extra() if extra else {}
 
 
-def fetch_remote_models(provider_id):
+def fetch_remote_models(provider_id, force_refresh=False):
     """Query the provider's /v1/models endpoint and return a list of model IDs.
 
     Returns (models_list, error_string). On success error is None;
     on failure models_list is [] and error describes what went wrong.
+
+    Successful results are cached in memory for _MODELS_CACHE_TTL_S so
+    repeated picker opens don't hammer the upstream gateway.
     """
+    global _REMOTE_MODELS_CACHE
+    now = _time.monotonic()
+    if not force_refresh:
+        hit = _REMOTE_MODELS_CACHE.get(provider_id)
+        if hit and (now - hit[0]) < _MODELS_CACHE_TTL_S:
+            return list(hit[1]), None
     spec = PROVIDERS.get(provider_id)
     if spec is None:
         return [], f"Unknown provider {provider_id!r}."
@@ -289,6 +303,7 @@ def fetch_remote_models(provider_id):
                 models.append(mid)
 
     models.sort()
+    _REMOTE_MODELS_CACHE[provider_id] = (_time.monotonic(), list(models))
     return models, None
 
 

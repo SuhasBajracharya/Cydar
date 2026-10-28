@@ -259,12 +259,18 @@ def provider_test(request, provider_id):
 
 @require_http_methods(["GET"])
 def provider_models(request, provider_id):
-    """Live-fetch available models from the provider's /v1/models endpoint."""
+    """Live-fetch available models from the provider's /v1/models endpoint.
+
+    Results are cached server-side for a few minutes; pass ?refresh=1 to
+    bypass the cache. The key never leaves the backend — the browser only
+    ever talks to this endpoint, never to the upstream gateway directly.
+    """
     if (denied := _unauthorized(request)) is not None:
         return denied
     if provider_id not in PROVIDERS:
         return JsonResponse({"detail": f"Unknown provider {provider_id!r}."}, status=404)
-    models, error = fetch_remote_models(provider_id)
+    force = request.GET.get("refresh") == "1"
+    models, error = fetch_remote_models(provider_id, force_refresh=force)
     if error:
         return JsonResponse({"models": [], "error": error})
     return JsonResponse({"models": models, "error": None})
